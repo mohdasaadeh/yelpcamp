@@ -3,6 +3,7 @@ const passport = require("passport");
 
 const funcErrorsWrapper = require("../utils/funcErrorsWrapper");
 const usersController = require("../controllers/users");
+const { userExists } = require("../middlewares");
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ const router = express.Router();
 router
   .route("/signup")
   .get(funcErrorsWrapper(usersController.signupGet))
-  .post(funcErrorsWrapper(usersController.signupPost));
+  .post(userExists, funcErrorsWrapper(usersController.signupPost));
 
 // Sign In
 router

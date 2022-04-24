@@ -1,5 +1,5 @@
-const Campground = require("../models/campground");
 const { cloudinary } = require("../cloudinary");
+const { mysqlConnection } = require("../utils/mysql");
 
 // This config is only for the geocoding service from MapBox
 const mbxGeocoding = require("@mapbox/mapbox-sdk/services/geocoding");
@@ -7,93 +7,234 @@ const mapBoxToken = process.env.MAPBOX_TOKEN;
 const geocoder = mbxGeocoding({ accessToken: mapBoxToken });
 
 module.exports = {
-  campgroundsList: async (req, res) => {
-    const campgrounds = await Campground.find();
+  campgroundsList: async (req, res, next) => {
+    const query = `
+    SELECT * FROM campgrounds 
+      JOIN campground_images ON campgrounds.id = campground_images.campground_id 
+        GROUP BY campgrounds.id
+    `;
 
-    res.render("campgrounds/index", { campgrounds });
+    mysqlConnection.query(query, (error, result) => {
+      if (error) next(error);
+
+      res.render("campgrounds/index", { campgrounds: result });
+    });
   },
   campgroundNewGet: (req, res) => {
     res.render("campgrounds/new");
   },
   campgroundNewPost: async (req, res) => {
+    const userId = req.user.id;
     const geoData = await geocoder
       .forwardGeocode({
         query: req.body.campground.location,
         limit: 1,
       })
       .send();
-    const campground = new Campground(req.body.campground);
-    campground.author = req.user;
-    campground.image = req.files.map((file) => ({
-      url: file.path,
-      filename: file.filename,
-    }));
-    campground.geometry = geoData.body.features[0].geometry;
+    const campground = {
+      ...req.body.campground,
+      coordinates: JSON.stringify(
+        geoData.body.features[0].geometry.coordinates
+      ),
+      user_id: userId,
+    };
 
-    const newCampground = await campground.save();
+    mysqlConnection.query(
+      "INSERT INTO campgrounds SET ?",
+      campground,
+      (error, insertResult) => {
+        if (error) next(error);
 
-    req.flash("success", "The campground has been created successfully");
+        const images = req.files.map((file) => ({
+          url: file.path,
+          filename: file.filename,
+          campground_id: insertResult.insertId,
+          user_id: userId,
+        }));
 
-    res.redirect(`/campgrounds/${newCampground._id}`);
+        images.forEach((image) => {
+          mysqlConnection.query(
+            "INSERT INTO campground_images SET ?",
+            image,
+            (error) => {
+              if (error) next(error);
+            }
+          );
+        });
+
+        req.flash("success", "The campground has been created successfully");
+
+        res.redirect(`/campgrounds/${insertResult.insertId}`);
+      }
+    );
   },
   campgroundShowGet: async (req, res, next) => {
     const id = req.params.id;
-    const foundCampground = await Campground.findById(id)
-      .populate({
-        path: "reviews",
-        populate: { path: "author" },
-      })
-      .populate("author");
+    const campgroundQuery = `
+    SELECT * FROM campgrounds 
+      WHERE id = ${id}
+    `;
 
-    if (!foundCampground) {
-      req.flash("error", "The campground couldn't be found!");
-      return res.redirect("/campgrounds");
-    }
+    mysqlConnection.query(campgroundQuery, (error, campgroundResult) => {
+      if (error) next(error);
 
-    res.render("campgrounds/show", { foundCampground });
+      mysqlConnection.query(
+        "SELECT * FROM users WHERE id = ?",
+        [campgroundResult[0].user_id],
+        (error, userResult) => {
+          if (error) next(error);
+
+          const imagesQuery = `
+          SELECT * FROM campground_images 
+            WHERE campground_id = ?
+          `;
+
+          mysqlConnection.query(
+            imagesQuery,
+            [campgroundResult[0].id],
+            (error, imagesResult) => {
+              if (error) next(error);
+
+              const reviewsQuery = `
+              SELECT * FROM reviews 
+                JOIN users ON reviews.user_id = users.id 
+                  WHERE campground_id = ?
+              `;
+
+              mysqlConnection.query(
+                reviewsQuery,
+                [campgroundResult[0].id],
+                (error, reviewsResult) => {
+                  if (error) next(error);
+                  console.log(campgroundResult);
+                  res.render("campgrounds/show", {
+                    campground: campgroundResult[0],
+                    user: userResult[0],
+                    images: imagesResult,
+                    reviews: reviewsResult,
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
+    });
   },
   campgroundEditGet: async (req, res) => {
     const id = req.params.id;
-    const foundCampground = await Campground.findById(id);
+    const campgroundQuery = `
+    SELECT * FROM campgrounds 
+      WHERE campgrounds.id = ${id}
+    `;
 
-    if (!foundCampground) {
-      req.flash("error", "The campground couldn't be found!");
-    }
+    mysqlConnection.query(campgroundQuery, (error, campgroundResult) => {
+      if (error) next(error);
 
-    res.render("campgrounds/edit", { foundCampground });
-  },
-  campgroundEditPut: async (req, res) => {
-    const id = req.params.id;
-    const deletedImages = req.body.deletedImages;
-
-    const campground = await Campground.findByIdAndUpdate(
-      id,
-      req.body.campground
-    );
-
-    const imgs = req.files.map((file) => ({
-      url: file.path,
-      filename: file.filename,
-    }));
-    campground.image.push(...imgs);
-
-    await campground.save();
-
-    if (deletedImages) {
-      for (let img of deletedImages) {
-        await cloudinary.uploader.destroy(img);
+      if (!campgroundResult[0]) {
+        req.flash("error", "The campground couldn't be found!");
       }
 
-      await campground.updateOne({
-        $pull: { image: { filename: { $in: deletedImages } } },
-      });
-    }
+      const imagesQuery = `
+      SELECT * FROM campground_images 
+        WHERE campground_id = ?
+      `;
 
-    res.redirect(`/campgrounds/${campground._id}`);
+      mysqlConnection.query(
+        imagesQuery,
+        [campgroundResult[0].id],
+        (error, imagesResult) => {
+          if (error) next(error);
+
+          res.render("campgrounds/edit", {
+            campground: campgroundResult[0],
+            images: imagesResult,
+          });
+        }
+      );
+    });
+  },
+  campgroundEditPut: async (req, res, next) => {
+    const id = req.params.id;
+    const userId = req.user.id;
+    const deletedImages = req.body.deletedImages;
+    const geoData = await geocoder
+      .forwardGeocode({
+        query: req.body.campground.location,
+        limit: 1,
+      })
+      .send();
+    const campground = {
+      ...req.body.campground,
+      coordinates: JSON.stringify(
+        geoData.body.features[0].geometry.coordinates
+      ),
+    };
+    const campgroundQuery = `
+    UPDATE campgrounds 
+      SET ?
+        WHERE id = ${id}
+    `;
+
+    mysqlConnection.query(campgroundQuery, campground, async (error) => {
+      if (error) next(error);
+
+      const images = req.files.map((file) => ({
+        url: file.path,
+        filename: file.filename,
+        campground_id: id,
+        user_id: userId,
+      }));
+      const imagesQuery = `
+        INSERT INTO campground_images 
+          SET ?
+      `;
+
+      images.forEach((image) => {
+        mysqlConnection.query(imagesQuery, image, (error) => {
+          if (error) next(error);
+        });
+      });
+
+      if (deletedImages) {
+        for (let img of deletedImages) {
+          await cloudinary.uploader.destroy(img);
+
+          mysqlConnection.query(
+            "DELETE FROM campground_images WHERE filename = ?",
+            img,
+            (error) => {
+              if (error) next(error);
+            }
+          );
+        }
+      }
+
+      res.redirect(`/campgrounds/${id}`);
+    });
   },
   campgroundDelete: async (req, res) => {
-    await Campground.findByIdAndDelete(req.params.id);
+    const campgroundId = req.params.id;
+    mysqlConnection.query(
+      "DELETE FROM campgrounds WHERE id = ?",
+      campgroundId,
+      (error) => {
+        if (error) next(error);
 
-    res.redirect("/campgrounds");
+        mysqlConnection.query(
+          "SELECT * FROM campground_images WHERE campground_id = ?",
+          campgroundId,
+          async (error, imagesResult) => {
+            if (error) next(error);
+
+            for (let img of imagesResult) {
+              await cloudinary.uploader.destroy(img);
+            }
+
+            res.redirect("/campgrounds");
+          }
+        );
+      }
+    );
   },
 };

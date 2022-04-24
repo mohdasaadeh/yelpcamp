@@ -9,7 +9,7 @@
         data-ride="carousel"
       >
         <div class="carousel-inner">
-          <% foundCampground.image.forEach((file, i) => { %>
+          <% images.forEach((file, i) => { %>
           <div class="carousel-item <%= i === 0 ? "active" : "" %> ">
             <img class="d-block w-100" src="<%= file.url %> " alt="" />
           </div>
@@ -35,29 +35,29 @@
         </a>
       </div>
       <div class="card-body">
-        <h5 class="card-title"><%= foundCampground.title%></h5>
-        <p class="card-text"><%= foundCampground.description%></p>
+        <h5 class="card-title"><%= campground.title%></h5>
+        <p class="card-text"><%= campground.description%></p>
       </div>
       <ul class="list-group list-group-flush">
         <li class="list-group-item text-muted">
-          <%= foundCampground.location%>
+          <%= campground.location%>
         </li>
         <li class="list-group-item text-muted">
-          Submitted by <%= foundCampground.author.username%>
+          Submitted by <%= user.username%>
         </li>
-        <li class="list-group-item">$<%= foundCampground.price%>/night</li>
+        <li class="list-group-item">$<%= campground.price%>/night</li>
       </ul>
-      <% if (currentUser && (foundCampground.author.username ===
+      <% if (currentUser && (user.username ===
       currentUser.username)) {%>
       <div class="card-body">
         <a
           class="card-link btn btn-info"
-          href="/campgrounds/<%=foundCampground._id%>/edit"
+          href="/campgrounds/<%=campground.id%>/edit"
           >Edit</a
         >
         <form
           class="d-inline"
-          action="/campgrounds/<%=foundCampground._id%>?_method=DELETE"
+          action="/campgrounds/<%=campground.id%>?_method=DELETE"
           method="POST"
         >
           <button class="btn btn-danger">Delete</button>
@@ -74,7 +74,7 @@
       <h1>Reviews</h1>
     <div class="mb-3">
       <form
-        action="/campgrounds/<%=foundCampground._id%>/reviews"
+        action="/campgrounds/<%=campground.id%>/reviews"
         method="POST"
         class="needs-validation"
         novalidate
@@ -138,21 +138,21 @@
         <button class="btn btn-success mt-3">Review</button>
       </form>
     </div>
-    <% } %> <% if (foundCampground.reviews.length) { %> <% for (let review of
-    foundCampground.reviews) { %>
+    <% } %> <% if (reviews.length) { %> <% for (let review of
+    reviews) { %>
     <div class="card mb-3">
       <div class="card-body">
-        <h5 class="text-muted"><%= review.author.username %></h5>
+        <h5 class="text-muted"><%= review.username %></h5>
         <p class="starability-result" data-rating="<%= review.rating %>">
           Rated: 3 stars
         </p>
         <div>
           <p><%= review.body %></p>
-          <% if (currentUser && (review.author.username ===
+          <% if (currentUser && (review.username ===
           currentUser.username)) {%>
           <form
             class="d-inline"
-            action="/campgrounds/<%=foundCampground._id%>/reviews/<%=review._id%>?_method=DELETE"
+            action="/campgrounds/<%=campground.id%>/reviews/<%=review.id%>?_method=DELETE"
             method="POST"
           >
             <button class="btn btn-danger">Delete</button>
@@ -166,6 +166,6 @@
 </div>
 <script>
     const mapToken = "<%= process.env.MAPBOX_TOKEN %>";
-    const campground = <%- JSON.stringify(foundCampground) %>;
+    const campground = <%- JSON.stringify(campground) %>;
 </script>
 <script src="/javascripts/showMap.js"></script>

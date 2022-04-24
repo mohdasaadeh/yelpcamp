@@ -1,10 +1,20 @@
 const mongoose = require("mongoose");
 
-const Campground = require("../models/campground");
-const Review = require("../models/review");
-const User = require("../models/user");
 const cities = require("./cities");
 const { places, descriptors } = require("./seedHelpers");
+
+const mysql = require("mysql");
+
+const mysqlOptions = {
+  host: "localhost",
+  port: 3306,
+  user: "root",
+  password: "***",
+  database: "yelpcamp",
+};
+
+const mysqlConnection = mysql.createConnection(mysqlOptions);
+mysqlConnection.connect();
 
 const mongoDB = mongoose.connection;
 
@@ -17,33 +27,72 @@ mongoDB.once("open", () => {
 const sample = (array) => array[Math.floor(Math.random() * array.length)];
 
 const seedDB = async () => {
-  await Campground.deleteMany({});
-  await Review.deleteMany({});
-  const author = await User.findOne({ username: "Mohammad" });
-  for (let i = 0; i < 50; i++) {
-    const price = Math.floor(Math.random() * 20) + 10;
-    const camp = new Campground({
-      location: `${sample(cities).city}, ${sample(cities).state}`,
-      title: `${sample(descriptors)} ${sample(places)}`,
-      image: [
-        {
-          url: "https://source.unsplash.com/collection/483251",
-          filename: `seedImage_${i}`,
-        },
-      ],
-      description:
-        "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quibusdam dolores vero perferendis laudantium, consequuntur voluptatibus nulla architecto, sit soluta esse iure sed labore ipsam a cum nihil atque molestiae deserunt!",
-      price,
-      author,
-      geometry: {
-        type: "Point",
-        coordinates: [sample(cities).longitude, sample(cities).latitude],
-      },
-    });
-    await camp.save();
-  }
+  mysqlConnection.query("DELETE FROM campgrounds", (error) => {
+    if (error) {
+      console.log(error);
+    } else {
+      console.log("Deleted");
+    }
+
+    mysqlConnection.query(
+      "SELECT id FROM users WHERE username = ?",
+      ["Mohammad"],
+      (error, userResult) => {
+        if (error) {
+          console.log(error);
+        } else {
+          console.log("User Found");
+        }
+
+        for (let i = 1; i < 51; i++) {
+          const price = Math.floor(Math.random() * 20) + 10;
+          const campground = {
+            title: `${sample(descriptors)} ${sample(places)}`,
+            price,
+            description:
+              "Lorem ipsum dolor sit amet consectetur adipisicing elit. Quibusdam dolores vero perferendis laudantium, consequuntur voluptatibus nulla architecto, sit soluta esse iure sed labore ipsam a cum nihil atque molestiae deserunt!",
+            location: `${sample(cities).city}, ${sample(cities).state}`,
+            coordinates: JSON.stringify([
+              sample(cities).longitude,
+              sample(cities).latitude,
+            ]),
+            user_id: userResult[0].id,
+          };
+
+          mysqlConnection.query(
+            "INSERT INTO campgrounds SET ?",
+            campground,
+            (error) => {
+              if (error) {
+                console.log(error);
+              } else {
+                console.log("Campground Inserted");
+
+                const campground_image = {
+                  url: "https://source.unsplash.com/collection/483251",
+                  filename: `seedImage_${i}`,
+                  campground_id: i,
+                  user_id: userResult[0].id,
+                };
+
+                mysqlConnection.query(
+                  "INSERT INTO campground_images SET ?",
+                  campground_image,
+                  (error) => {
+                    if (error) {
+                      console.log(error);
+                    } else {
+                      console.log("Camp image inserted");
+                    }
+                  }
+                );
+              }
+            }
+          );
+        }
+      }
+    );
+  });
 };
 
-seedDB().then(() => {
-  mongoose.connection.close();
-});
+seedDB();

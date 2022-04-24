@@ -3,7 +3,7 @@
   <h1 class="text-center">Edit Campground</h1>
   <div class="col-6 offset-3">
     <form
-      action="/campgrounds/<%= foundCampground._id %>/edit?_method=PUT"
+      action="/campgrounds/<%= campground.id %>/edit?_method=PUT"
       method="POST"
       class="needs-validation"
       enctype="multipart/form-data"
@@ -16,7 +16,7 @@
           type="text"
           id="title"
           name="campground[title]"
-          value="<%= foundCampground.title %>"
+          value="<%= campground.title %>"
           required
         />
       </div>
@@ -27,7 +27,7 @@
           type="text"
           id="location"
           name="campground[location]"
-          value="<%= foundCampground.location %>"
+          value="<%= campground.location %>"
           required
         />
       </div>
@@ -60,7 +60,7 @@
             aria-label="price"
             aria-describedby="price-label"
             name="campground[price]"
-            value="<%= foundCampground.price %>"
+            value="<%= campground.price %>"
             required
           />
         </div>
@@ -75,11 +75,11 @@
           name="campground[description]"
           required
         >
-<%= foundCampground.description %></textarea
+<%= campground.description %></textarea
         >
       </div>
       <div class="mb-3">
-        <% foundCampground.image.forEach((file, i) => {%>
+        <% images.forEach((file, i) => {%>
         <img src="<%= file.thumbnail %> " class="img-thumbnail" alt="" />
         <div class="form-check-inline">
           <input

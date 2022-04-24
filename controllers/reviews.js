@@ -1,28 +1,31 @@
-const Review = require("../models/review");
-const Campground = require("../models/campground");
+const { mysqlConnection } = require("../utils/mysql");
 
 module.exports = {
   reviewPost: async (req, res) => {
     const campID = req.params.campID;
+    const review = {
+      ...req.body.review,
+      campground_id: campID,
+      user_id: req.user.id,
+    };
 
-    const review = new Review(req.body.review);
-    review.author = req.user;
-    const foundCampground = await Campground.findById(campID);
-    foundCampground.reviews.push(review);
+    mysqlConnection.query("INSERT INTO reviews SET ?", review, (error) => {
+      if (error) next(error);
 
-    await foundCampground.save();
-    await review.save();
-
-    res.redirect(`/campgrounds/${campID}`);
+      res.redirect(`/campgrounds/${campID}`);
+    });
   },
   reviewDelete: async (req, res) => {
     const { campID, reviewID } = req.params;
 
-    await Campground.findByIdAndUpdate(campID, {
-      $pull: { reviews: reviewID },
-    });
-    await Review.findByIdAndDelete(reviewID);
+    mysqlConnection.query(
+      "DELETE FROM reviews WHERE id = ?",
+      reviewID,
+      (error) => {
+        if (error) next(error);
 
-    res.redirect(`/campgrounds/${campID}`);
+        res.redirect(`/campgrounds/${campID}`);
+      }
+    );
   },
 };
